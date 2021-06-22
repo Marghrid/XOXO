@@ -2,24 +2,29 @@
 import argparse
 import subprocess
 import sys
+import time
+
 
 def sign(l): return l[0] == '-'
+
+
 def var(l): return l[1:] if l[0] == '-' else l
+
 
 from encoder import Encoder
 
 solver = "cadical"
 
 
-def get_model(lns):
+def get_model(lines):
     vals = dict()
     found = False
-    for l in lns:
-        l = l.rstrip()
-        if not l: continue
-        if not l.startswith('v ') and not l.startswith('V '): continue
+    for line in lines:
+        line = line.rstrip()
+        if not line: continue
+        if not line.startswith('v ') and not line.startswith('V '): continue
         found = True
-        vs = l.split()[1:]
+        vs = line.split()[1:]
         for v in vs:
             if v == '0': break
             vals[int(var(v))] = not sign(v)
@@ -37,10 +42,8 @@ if __name__ == '__main__':
                            help='print all encoded constraints')
     argparser.add_argument('-v', '--verbose', action='store_true', help='print everything')
     argparser.add_argument('-d', '--debug', action='store_true', help='debug solver')
-    argparser.add_argument('--time', action='store_true', help='time solver')
     args = argparser.parse_args()
 
-    time = args.time
     print_constraints = args.print_constraints
     print_model = args.print_model
     if args.verbose:
@@ -57,16 +60,17 @@ if __name__ == '__main__':
 
     if print_constraints:
         print("# encoded constraints")
-        print("# " + "\n# ".join(map(str, encoder.constraints)))
+        # print("# " + "\n# ".join(map(str, encoder.constraints)))
+        encoder.print_constraints()
         print("# END encoded constraints")
 
     print("# sending to solver '" + str(solver) + "'")
-    cnf = encoder.mk_cnf(False)
-    if time:
-        solver = '/usr/bin/time -f "%E" ' + solver
+    cnf = encoder.make_dimacs(False)
+    start_time = time.time()
     p = subprocess.Popen(solver, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
     (po, pe) = p.communicate(input=bytes(cnf, encoding='utf-8'))
+    elapsed = time.time() - start_time
 
     print("# decoding result from solver")
     rc = p.returncode
@@ -83,11 +87,11 @@ if __name__ == '__main__':
             encoder.print_model(get_model(lns))
         print("SAT")
         encoder.print_solution(get_model(lns))
+        encoder.show_solution(get_model(lns))
 
     elif rc == 20:
         print("UNSAT")
     else:
         print("ERROR: something went wrong with the solver")
 
-    if time:
-        print('real (wall clock) time:', lnse[-1])
+    print('Time:', elapsed)
