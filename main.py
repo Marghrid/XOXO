@@ -1,137 +1,93 @@
-from itertools import combinations
-
-
-class Piece:
-    def __init__(self, id: int):
-        assert 0 <= id <= 9, f"id is {id}"
-        self.num_parts = 5
-        self.os = []
-        self.coords = []
-
-        init_method = self.__getattribute__(f"init_{id}")
-        init_method()
-
-        for x1, x2 in combinations(range(len(self.coords)), 2):
-            pos1, pos2 = self.coords[x1], self.coords[x2]
-            distance = (pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2
-            if distance == 1:
-                assert self.os[x1] != self.os[x2], str(self)
-
-    def __str__(self):
-        ret = ''
-        for i in range(max(map(lambda c: c[0], self.coords))):
-            for j in range(max(map(lambda c: c[1], self.coords))):
-                if (i, j) in self.coords:
-                    s = 'O' if self.os[self.coords.index((i, j))] else 'X'
-                else:
-                    s = ' '
-                ret += s
-            ret += '\n'
-        return ret[:-1]
-
-    def init_0(self):
-        self.coords = [(0, 0), (0, 1), (0, 2), (1, 2), (2, 2)]
-        self.os = [True, False, True, False, True]
-
-    def init_1(self):
-        self.coords = [(0, 0), (1, 0), (2, 0), (2, 1), (3, 1)]
-        self.os = [False, True, False, True, False]
-
-    def init_2(self):
-        self.coords = [(0, 0), (1, 0), (0, 1), (0, 2), (1, 2)]
-        self.os = [False, True, True, False, True]
-
-    def init_3(self):
-        self.coords = [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]
-        self.os = [True, False, True, False, True]
-
-    def init_4(self):
-        self.coords = [(0, 0), (0, 1), (1, 1), (1, 2), (2, 2)]
-        self.os = [False, True, False, True, False]
-
-    def init_5(self):
-        self.coords = [(0, 0), (1, 0), (0, 1), (0, 2), (0, 3)]
-        self.os = [True, False, False, True, False]
-
-    def init_6(self):
-        self.coords = [(0, 0), (0, 1), (0, 2), (1, 1), (1, 2)]
-        self.os = [True, False, True, True, False]
-
-    def init_7(self):
-        self.coords = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1)]
-        self.os = [True, False, True, False, True]
-
-    def init_8(self):
-        self.coords = [(0, 0), (0, 1), (1, 1), (2, 1), (2, 2)]
-        self.os = [False, True, False, True, False]
-
-    def init_9(self):
-        self.coords = [(0, 0), (0, 1), (0, 2), (0, 3), (1, 2)]
-        self.os = [True, False, True, False, False]
-
-
-class Encoder:
-    def __init__(self, width: int, height: int):
-        self.width = width
-        self.height = height
-        self.pieces = []
-
-        self._vars = {}
-
-        self.init_pieces()
-        self.num_pieces = len(self.pieces)
-        self.init_vars()
-
-    def o(self, i: int, j: int):
-        assert 0 <= i <= self.width
-        assert 0 <= j <= self.height
-
-        return f"o_{str(i).rjust(len(str(self.width - 1)), '0')}_" \
-               f"{str(j).rjust(len(str(self.height - 1)), '0')}"
-
-    def p(self, i: int, j: int, k: int, l: int):
-        assert 0 <= i <= self.width
-        assert 0 <= j <= self.height
-        assert 0 <= k <= self.num_pieces
-        assert 0 <= l <= self.pieces[k].num_parts
-
-        return f"p_{str(i).rjust(len(str(self.width - 1)), '0')}_" \
-               f"{str(j).rjust(len(str(self.height - 1)), '0')}_" \
-               f"{str(k).rjust(len(str(self.num_pieces - 1)), '0')}_" \
-               f"{str(l).rjust(len(str(self.pieces[k].num_parts - 1)), '0')}"
-
-    def init_pieces(self):
-        for k in range(10):
-            p = Piece(k)
-            self.pieces.append(p)
-
-    def init_vars(self):
-        # o vars
-        for i in range(self.width):
-            for j in range(self.height):
-                self.add_var(self.o(i, j))
-
-        # p vars
-        for i in range(self.width):
-            for j in range(self.height):
-                for k in range(self.num_pieces):
-                    for l in range(self.pieces[k].num_parts):
-                        self.add_var(self.p(i, j, k, l))
-
-    def encode(self):
-        print(self._vars)
-
-    def solve(self):
-        return None
-
-    def add_var(self, var: str):
-        self._vars[var] = len(self._vars)
-
-
 # Press the green button in the gutter to run the script.
+import argparse
+import subprocess
+import sys
+
+def sign(l): return l[0] == '-'
+def var(l): return l[1:] if l[0] == '-' else l
+
+from encoder import Encoder
+
+solver = "cadical"
+
+
+def get_model(lns):
+    vals = dict()
+    found = False
+    for l in lns:
+        l = l.rstrip()
+        if not l: continue
+        if not l.startswith('v ') and not l.startswith('V '): continue
+        found = True
+        vs = l.split()[1:]
+        for v in vs:
+            if v == '0': break
+            vals[int(var(v))] = not sign(v)
+    return vals if found else None
+
+
 if __name__ == '__main__':
+
+    debug_solver = False
+
+    argparser = argparse.ArgumentParser()
+    # argparser.add_argument('-t', '--print_tree', action='store_true', help='print decision tree')
+    argparser.add_argument('-m', '--print_model', action='store_true', help='print model')
+    argparser.add_argument('-c', '--print_constraints', action='store_true',
+                           help='print all encoded constraints')
+    argparser.add_argument('-v', '--verbose', action='store_true', help='print everything')
+    argparser.add_argument('-d', '--debug', action='store_true', help='debug solver')
+    argparser.add_argument('--time', action='store_true', help='time solver')
+    args = argparser.parse_args()
+
+    time = args.time
+    print_constraints = args.print_constraints
+    print_model = args.print_model
+    if args.verbose:
+        print_constraints = True
+        print_model = True
+    debug_solver = args.debug
+
+    print("# encoding")
+
     board_height = 5
     board_width = 10
     encoder = Encoder(board_width, board_height)
     encoder.encode()
-    solution = encoder.solve()
+
+    if print_constraints:
+        print("# encoded constraints")
+        print("# " + "\n# ".join(map(str, encoder.constraints)))
+        print("# END encoded constraints")
+
+    print("# sending to solver '" + str(solver) + "'")
+    cnf = encoder.mk_cnf(False)
+    if time:
+        solver = '/usr/bin/time -f "%E" ' + solver
+    p = subprocess.Popen(solver, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    (po, pe) = p.communicate(input=bytes(cnf, encoding='utf-8'))
+
+    print("# decoding result from solver")
+    rc = p.returncode
+    lns = str(po, encoding='utf-8').splitlines()
+    lnse = str(pe, encoding='utf-8').split()
+
+    if debug_solver:
+        print('\n'.join(lns), file=sys.stderr)
+        print(cnf, file=sys.stderr)
+        print(lns)
+
+    if rc == 10:
+        if print_model:
+            encoder.print_model(get_model(lns))
+        print("SAT")
+        encoder.print_solution(get_model(lns))
+
+    elif rc == 20:
+        print("UNSAT")
+    else:
+        print("ERROR: something went wrong with the solver")
+
+    if time:
+        print('real (wall clock) time:', lnse[-1])
