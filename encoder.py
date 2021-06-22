@@ -232,7 +232,7 @@ class Encoder:
                 plt.text(j, i, 'O' if is_o else 'X',
                          horizontalalignment='center',
                          verticalalignment='center',
-                         fontweight="bold", size='xx-large', color='0.2'
+                         fontweight='bold', size='xx-large', color='0.2'
                          )
         plt.show(bbox_inches='tight', pad_inches=0.15)
 
