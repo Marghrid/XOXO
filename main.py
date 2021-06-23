@@ -4,16 +4,35 @@ import subprocess
 import sys
 import time
 
-
-def sign(l): return l[0] == '-'
-
-
-def var(l): return l[1:] if l[0] == '-' else l
-
-
 from encoder import Encoder
 
+
+def sign(lit): return lit[0] == '-'
+
+
+def var(lit): return lit[1:] if lit[0] == '-' else lit
+
+
 solver = "cadical"
+
+
+def nice_time(total_seconds):
+    """ Prints a time in a nice, legible format. """
+    if total_seconds < 60:
+        return f'{round(total_seconds, 1)}s'
+    total_seconds = round(total_seconds)
+    mins, secs = divmod(total_seconds, 60)
+    hours, mins = divmod(mins, 60)
+    days, hours = divmod(hours, 24)
+    ret = ''
+    if days > 0:
+        ret += f'{days}d'
+    if hours > 0:
+        ret += f'{hours}h'
+    if mins > 0:
+        ret += f'{mins}m'
+    ret += f'{secs}s'
+    return ret
 
 
 def get_model(lines):
@@ -31,21 +50,50 @@ def get_model(lines):
     return vals if found else None
 
 
+def send_to_solver(cnf: str):
+    print(f"# sending to solver '{solver}'. Dimacs: {len(cnf)} chars.")
+    start_time = time.time()
+    p = subprocess.Popen(solver, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    po, pe = p.communicate(input=bytes(cnf, encoding='utf-8'))
+    elapsed = time.time() - start_time
+    print(f"# took {nice_time(elapsed)}.")
+    print("# decoding result from solver")
+    rc = p.returncode
+    s_out = str(po, encoding='utf-8').splitlines()
+    s_err = str(pe, encoding='utf-8').split()
+    if debug_solver:
+        print('\n'.join(s_out), file=sys.stderr)
+        print(cnf, file=sys.stderr)
+        print(s_out)
+
+    if rc == 10:
+        return 1, s_out
+
+    elif rc == 20:
+        return 0, s_out
+    else:
+        return None
+
+
 if __name__ == '__main__':
 
     debug_solver = False
 
     argparser = argparse.ArgumentParser()
-    # argparser.add_argument('-t', '--print_tree', action='store_true', help='print decision tree')
-    argparser.add_argument('-m', '--print_model', action='store_true', help='print model')
-    argparser.add_argument('-c', '--print_constraints', action='store_true',
-                           help='print all encoded constraints')
-    argparser.add_argument('-v', '--verbose', action='store_true', help='print everything')
-    argparser.add_argument('-d', '--debug', action='store_true', help='debug solver')
+    argparser.add_argument('-a', '--all-models', action='store_true', help='Get all models')
+    argparser.add_argument('-m', '--print-model', action='store_true', help='Print model')
+    argparser.add_argument('-s', '--show-solution', action='store_true',
+                           help='Show solution using matplotlib')
+    argparser.add_argument('-c', '--print-constraints', action='store_true',
+                           help='Print all encoded constraints')
+    argparser.add_argument('-v', '--verbose', action='store_true', help='Print everything')
+    argparser.add_argument('-d', '--debug', action='store_true', help='Debug solver')
     args = argparser.parse_args()
 
     print_constraints = args.print_constraints
     print_model = args.print_model
+    get_all_models = args.all_models
     if args.verbose:
         print_constraints = True
         print_model = True
@@ -60,38 +108,41 @@ if __name__ == '__main__':
 
     if print_constraints:
         print("# encoded constraints")
-        # print("# " + "\n# ".join(map(str, encoder.constraints)))
         encoder.print_constraints()
         print("# END encoded constraints")
 
-    print("# sending to solver '" + str(solver) + "'")
-    cnf = encoder.make_dimacs(False)
-    start_time = time.time()
-    p = subprocess.Popen(solver, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE)
-    (po, pe) = p.communicate(input=bytes(cnf, encoding='utf-8'))
-    elapsed = time.time() - start_time
+    result, solver_output = send_to_solver(encoder.make_dimacs())
 
-    print("# decoding result from solver")
-    rc = p.returncode
-    lns = str(po, encoding='utf-8').splitlines()
-    lnse = str(pe, encoding='utf-8').split()
+    if not get_all_models:
+        if result == 1:
+            model = get_model(solver_output)
+            if print_model:
+                encoder.print_model(model)
+            print("SAT")
+            encoder.print_solution(model)
+            encoder.show_solution(model)
 
-    if debug_solver:
-        print('\n'.join(lns), file=sys.stderr)
-        print(cnf, file=sys.stderr)
-        print(lns)
+        elif result == 0:
+            print("UNSAT")
+        else:
+            print("ERROR: something went wrong with the solver")
 
-    if rc == 10:
-        if print_model:
-            encoder.print_model(get_model(lns))
-        print("SAT")
-        encoder.print_solution(get_model(lns))
-        encoder.show_solution(get_model(lns))
-
-    elif rc == 20:
-        print("UNSAT")
     else:
-        print("ERROR: something went wrong with the solver")
+        model = None
+        old = None
+        while result == 1:
 
-    print('Time:', elapsed)
+            model = get_model(solver_output)
+
+            if print_model:
+                encoder.print_model(model)
+            encoder.print_solution(model)
+            encoder.show_solution(model)
+
+            encoder.block_model(model)
+            if print_constraints:
+                print("# encoded constraints")
+                encoder.print_constraints()
+                print("# END encoded constraints")
+            result, solver_output = send_to_solver(encoder.make_dimacs())
+        print("# End of models")

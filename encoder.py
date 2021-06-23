@@ -176,7 +176,7 @@ class Encoder:
     def add_var(self, var: str):
         self._vars[var] = len(self._vars) + 1
 
-    def make_dimacs(self, param):
+    def make_dimacs(self):
         """encode constraints as CNF in DIMACS"""
         s = ''
         s += "c Pedro's XOXO\n"
@@ -235,6 +235,19 @@ class Encoder:
                          fontweight='bold', size='xx-large', color='0.2'
                          )
         plt.show(bbox_inches='tight', pad_inches=0.15)
+
+    def block_model(self, model: dict):
+        reversed_vars = {value: key for (key, value) in self._vars.items()}
+        ctr = []
+        for var_idx in model:
+            if reversed_vars[var_idx].startswith("p"):
+                if model[var_idx]:
+                    lit = neg(reversed_vars[var_idx])
+                    # else:
+                    #     lit = reversed_vars[var_idx]
+                    ctr.append(lit)
+        assert len(ctr) == self.height * self.width
+        self.add_constraint(ctr)
 
     def get_solution(self, model):
         reversed_vars = {value: key for (key, value) in self._vars.items()}
@@ -298,10 +311,10 @@ class Encoder:
                         self.add_constraint(ctr)
 
                 # each part is in the correct 'X' or 'O'
-                for l in range(piece.num_parts):
-                    pos_l = self.p(i, j, piece.idx, l)
-                    if piece.os[l]:  # this part is an 'O'
-                        ctr = [neg(pos_l), self.o(i, j)]
-                    else:
-                        ctr = [neg(pos_l), neg(self.o(i, j))]
-                    self.add_constraint(ctr)
+                # for l in range(piece.num_parts):
+                #     pos_l = self.p(i, j, piece.idx, l)
+                #     if piece.os[l]:  # this part is an 'O'
+                #         ctr = [neg(pos_l), self.o(i, j)]
+                #     else:
+                #         ctr = [neg(pos_l), neg(self.o(i, j))]
+                #     self.add_constraint(ctr)
