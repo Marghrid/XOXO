@@ -93,6 +93,7 @@ if __name__ == '__main__':
 
     print_constraints = args.print_constraints
     print_model = args.print_model
+    show_solution = args.show_solution
     get_all_models = args.all_models
     if args.verbose:
         print_constraints = True
@@ -120,7 +121,8 @@ if __name__ == '__main__':
                 encoder.print_model(model)
             print("SAT")
             encoder.print_solution(model)
-            encoder.show_solution(model)
+            if show_solution:
+                encoder.show_solution(model)
 
         elif result == 0:
             print("UNSAT")
@@ -137,7 +139,8 @@ if __name__ == '__main__':
             if print_model:
                 encoder.print_model(model)
             encoder.print_solution(model)
-            encoder.show_solution(model)
+            if show_solution:
+                encoder.show_solution(model)
 
             encoder.block_model(model)
             if print_constraints:

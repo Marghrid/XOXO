@@ -1,4 +1,5 @@
 import re
+import socket
 from itertools import combinations
 
 import matplotlib.pyplot as plt
@@ -8,6 +9,12 @@ from piece import Piece, colors
 
 
 def neg(lit: str): return lit[1:] if lit[0] == '-' else '-' + lit
+
+
+inesc_servers = ["centaurus", "musca", "octans", "scutum", "spica", "serpens", "sextans", "crux",
+                 "crater", "corvus", "dorado"]
+
+sol_num = 0
 
 
 class Encoder:
@@ -216,6 +223,7 @@ class Encoder:
         print(ret)
 
     def show_solution(self, model: dict):
+        global sol_num
         solution_os, solution_ps = self.get_solution(model)
         data = []
         for i in range(self.height):
@@ -234,7 +242,14 @@ class Encoder:
                          verticalalignment='center',
                          fontweight='bold', size='xx-large', color='0.2'
                          )
-        plt.show(bbox_inches='tight', pad_inches=0.15)
+        if socket.gethostname() in inesc_servers:
+            plt.savefig(f'/home/macf/public_html/xoxo/configs/'
+                        f'xoxo_{sol_num:03}.pdf',
+                        format="pdf", bbox_inches='tight', pad_inches=0.15)
+            sol_num += 1
+        else:
+            plt.show(bbox_inches='tight', pad_inches=0.15)
+            sol_num += 1
 
     def block_model(self, model: dict):
         reversed_vars = {value: key for (key, value) in self._vars.items()}
