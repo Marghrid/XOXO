@@ -18,6 +18,7 @@ def var(lit): return lit[1:] if lit[0] == '-' else lit
 
 config: Optional["Configurations"] = None
 solver = "cadical"
+solutions = set()
 
 
 @dataclass
@@ -112,15 +113,16 @@ def read_cmd_args():
                             args.all_models, args.debug)
 
 
-def print_sat(model: dict, encoder: Encoder):
+def handle_sat(model: dict, encoder: Encoder):
     """ Print everything after a positive reply from the solver. """
     solution = encoder.get_solution(model)
     if config.print_model:
         encoder.print_model(model)
     print("SAT")
     print(solution)
-    if config.show_solution:
+    if solution not in solutions and config.show_solution:
         solution.show()
+    solutions.add(solution)
 
 
 def main():
@@ -140,7 +142,7 @@ def main():
     if not config.all_models:
         if result == 1:
             assert model is not None
-            print_sat(model, encoder)
+            handle_sat(model, encoder)
         elif result == 0:
             print("UNSAT")
         else:
@@ -149,7 +151,7 @@ def main():
     else:  # get all models
         while result == 1:
             assert model is not None
-            print_sat(model, encoder)
+            handle_sat(model, encoder)
 
             # block this model
             encoder.block_model(model)
