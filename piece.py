@@ -3,7 +3,7 @@ from itertools import combinations
 import numpy as np
 from termcolor import colored
 
-colors = ["red", "green", "yellow", "blue", "magenta", "cyan"]
+term_colors = ["red", "green", "yellow", "blue", "magenta", "cyan"]
 
 
 class Piece:
@@ -14,6 +14,7 @@ class Piece:
         self.coords = []
         self.idx = idx
 
+        # DIRTY, UGLY HACK!! Pieces are hardcoded.
         init_method = self.__getattribute__(f"init_{idx}")
         init_method()
 
@@ -22,9 +23,6 @@ class Piece:
             distance = (pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2
             if distance == 1:
                 assert self.os[x1] != self.os[x2], str(self)
-
-        print(f"Piece #{idx}")
-        print(self)
 
     def init_0(self):
         self.coords = [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2]]
@@ -72,7 +70,7 @@ class Piece:
             for j in range(max(map(lambda c: c[1], self.coords)) + 1):
                 if [i, j] in self.coords:
                     s = str(self.idx) + ('O' if self.os[self.coords.index([i, j])] else 'X')
-                    s = colored(s, colors[self.idx % len(colors)])
+                    s = colored(s, term_colors[self.idx % len(term_colors)])
                 else:
                     s = f'  '
                 ret += s
@@ -80,25 +78,33 @@ class Piece:
         return ret[:-1]
 
     def get_rotations(self):
-        rotations = [(False, self.coords)]
-        coords_matrix = np.array(self.coords)
-        rotation_matrix_90 = np.array([[0, 1], [-1, 0]])
-        rotation_matrix_180 = np.array([[-1, 0], [0, -1]])
-        rotation_matrix_270 = np.array([[0, -1], [1, 0]])
-        rotated_90 = np.dot(coords_matrix, rotation_matrix_90).tolist()
-        rotated_180 = np.dot(coords_matrix, rotation_matrix_180).tolist()
-        rotated_270 = np.dot(coords_matrix, rotation_matrix_270).tolist()
+        """ Returns alternate sets of coordinates for pieces, considering all possible rotations.
+        Solution is a tuple (flipped, coordinates), where flipped is a bool and coordinates a
+        list. """
+        rotation_mat_90 = np.array([[0, 1], [-1, 0]])
+        rotation_mat_180 = np.array([[-1, 0], [0, -1]])
+        rotation_mat_270 = np.array([[0, -1], [1, 0]])
 
+        # Initial coordinates are a non-flipped rotation.
+        rotations = [(False, self.coords)]
+        coords_mat = np.array(self.coords)
+
+        # rotate rotate rotate
+        rotated_90 = np.dot(coords_mat, rotation_mat_90).tolist()
+        rotated_180 = np.dot(coords_mat, rotation_mat_180).tolist()
+        rotated_270 = np.dot(coords_mat, rotation_mat_270).tolist()
         rotations.append((False, rotated_90))
         rotations.append((False, rotated_180))
         rotations.append((False, rotated_270))
 
-        flipped_coords_matrix = np.dot(np.array(self.coords), np.array([[-1, 0], [0, 1]]))
-        rotated_90 = np.dot(flipped_coords_matrix, rotation_matrix_90).tolist()
-        rotated_180 = np.dot(flipped_coords_matrix, rotation_matrix_180).tolist()
-        rotated_270 = np.dot(flipped_coords_matrix, rotation_matrix_270).tolist()
+        # flip
+        flipped_coords_mat = np.dot(np.array(self.coords), np.array([[-1, 0], [0, 1]]))
+        rotations.append((True, flipped_coords_mat.tolist()))
 
-        rotations.append((True, flipped_coords_matrix.tolist()))
+        # rotate rotate rotate
+        rotated_90 = np.dot(flipped_coords_mat, rotation_mat_90).tolist()
+        rotated_180 = np.dot(flipped_coords_mat, rotation_mat_180).tolist()
+        rotated_270 = np.dot(flipped_coords_mat, rotation_mat_270).tolist()
         rotations.append((True, rotated_90))
         rotations.append((True, rotated_180))
         rotations.append((True, rotated_270))

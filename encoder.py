@@ -1,44 +1,29 @@
 import re
-import socket
 from itertools import combinations
 
-import matplotlib.pyplot as plt
-from termcolor import colored
-
-from piece import Piece, colors
+from board import Board
+from piece import Piece
+from solution import Solution
 
 
 def neg(lit: str): return lit[1:] if lit[0] == '-' else '-' + lit
 
 
-inesc_servers = ["centaurus", "musca", "octans", "scutum", "spica", "serpens", "sextans", "crux",
-                 "crater", "corvus", "dorado"]
-
-sol_num = 0
-
-
 class Encoder:
-    def __init__(self, width: int, height: int):
-        self.width = width
-        self.height = height
-        self.max_i = height - 1
-        self.max_j = width - 1
-        self.pieces = []
-
+    def __init__(self, board: Board):
         self._vars = {}
         self.constraints = []
         self.s_fresh = -1  # counter for sequential counter's aux s variables.
+        self.board = board
 
-        self.init_pieces()
-        self.num_pieces = len(self.pieces)
         self.init_vars()
 
     def o(self, i: int, j: int):
-        assert self.valid_i(i), f"i: {i}"
-        assert self.valid_j(j), f"j: {j}"
+        assert self.board.valid_i(i), f"i: {i}"
+        assert self.board.valid_j(j), f"j: {j}"
 
-        return f"o_{str(i).rjust(len(str(self.width - 1)), '0')}_" \
-               f"{str(j).rjust(len(str(self.height - 1)), '0')}"
+        return f"o_{str(i).rjust(len(str(self.board.max_i)), '0')}_" \
+               f"{str(j).rjust(len(str(self.board.max_j)), '0')}"
 
     @staticmethod
     def de_o(p_name: str):
@@ -46,23 +31,20 @@ class Encoder:
         return map(int, re.match(rgx, p_name).groups())
 
     def p(self, i: int, j: int, k: int, l: int):
-        assert self.valid_i(i), f"i: {i}"
-        assert self.valid_j(j), f"j: {j}"
-        assert 0 <= k <= self.num_pieces, f"k: {k}"
-        assert 0 <= l <= self.pieces[k].num_parts, f"l: {l}"
+        assert self.board.valid_i(i), f"i: {i}"
+        assert self.board.valid_j(j), f"j: {j}"
+        assert self.board.valid_k(k), f"k: {k}"
+        assert 0 <= l <= self.board.pieces[k].num_parts, f"l: {l}"
 
-        return f"p_{str(i).rjust(len(str(self.width - 1)), '0')}_" \
-               f"{str(j).rjust(len(str(self.height - 1)), '0')}_" \
-               f"{str(k).rjust(len(str(self.num_pieces - 1)), '0')}_" \
-               f"{str(l).rjust(len(str(self.pieces[k].num_parts - 1)), '0')}"
+        return f"p_{str(i).rjust(len(str(self.board.max_i)), '0')}_" \
+               f"{str(j).rjust(len(str(self.board.max_j)), '0')}_" \
+               f"{str(k).rjust(len(str(self.board.num_pieces - 1)), '0')}_" \
+               f"{str(l).rjust(len(str(self.board.pieces[k].num_parts - 1)), '0')}"
 
     @staticmethod
     def de_p(p_name: str):
         rgx = r"p_(\d+)_(\d+)_(\d+)_(\d+)"
         return map(int, re.match(rgx, p_name).groups())
-
-    def is_o(self, i: int, j: int) -> bool:
-        return (i + j) % 2 == 1
 
     # aux var for sequential counter encoding for <= 1 constraints
     def s(self, i):
@@ -71,25 +53,16 @@ class Encoder:
 
     def init_vars(self):
         # o vars
-        for i in range(self.height):
-            for j in range(self.width):
+        for i in range(self.board.height):
+            for j in range(self.board.width):
                 self.add_var(self.o(i, j))
 
         # p vars
-        for i in range(self.height):
-            for j in range(self.width):
-                for k in range(self.num_pieces):
-                    for l in range(self.pieces[k].num_parts):
+        for i in range(self.board.height):
+            for j in range(self.board.width):
+                for k in range(self.board.num_pieces):
+                    for l in range(self.board.pieces[k].num_parts):
                         self.add_var(self.p(i, j, k, l))
-
-    def valid_i(self, i: int):
-        return 0 <= i <= self.max_i
-
-    def valid_j(self, j: int):
-        return 0 <= j <= self.max_j
-
-    def valid_k(self, k: int):
-        return 0 <= k < self.num_pieces
 
     def add_constraint(self, constraint):
         """add constraints, which is a list of literals"""
@@ -146,49 +119,18 @@ class Encoder:
         """
         self.add_constraint(sum_lits)
 
-    def init_pieces(self):
-        for k in range(10):
-            p = Piece(k)
-            self.pieces.append(p)
-
     def encode(self):
         self.encode_board_constraints()
 
         # pieces' shape
-        for piece in self.pieces:
+        for piece in self.board.pieces:
             self.encode_piece_constraints(piece)
-
-    def encode_board_constraints(self):
-        # 'X' or 'O' for the whole board:
-        for i in range(self.height):
-            for j in range(self.width):
-                if self.is_o(i, j):
-                    self.add_constraint([self.o(i, j)])
-                else:
-                    self.add_constraint([neg(self.o(i, j))])
-
-        # Once piece per cell
-        for i in range(self.height):
-            for j in range(self.width):
-                to_sum = []
-                for k in range(self.num_pieces):
-                    for l in range(self.pieces[k].num_parts):
-                        to_sum.append(self.p(i, j, k, l))
-                self.add_sum_eq1(to_sum)
-        # One cell per piece:
-        for k in range(self.num_pieces):
-            for l in range(self.pieces[k].num_parts):
-                to_sum = []
-                for i in range(self.height):
-                    for j in range(self.width):
-                        to_sum.append(self.p(i, j, k, l))
-                self.add_sum_eq1(to_sum)
 
     def add_var(self, var: str):
         self._vars[var] = len(self._vars) + 1
 
     def make_dimacs(self):
-        """encode constraints as CNF in DIMACS"""
+        """ Encode constraints as CNF in DIMACS. """
         s = ''
         s += "c Pedro's XOXO\n"
         s += f"p cnf {len(self._vars)} {len(self.constraints)}\n"
@@ -217,47 +159,6 @@ class Encoder:
                 i, j = self.de_o(reversed_vars[var_id])
                 print(("o" if model[var_id] else "-o"), i, j)
 
-    def print_solution(self, model: dict):
-        solution_os, solution_ps = self.get_solution(model)
-        ret = ''
-        for i in range(self.height):
-            for j in range(self.width):
-                k, l = solution_ps[(i, j)]
-                # s = colored(str(k) + ("O" if is_o else "X"), colors[k % len(colors)])  # + str(l)
-                s = colored(str(k) + str(l), colors[k % len(colors)])
-                ret += s + " "
-            ret += '\n'
-        print(ret)
-
-    def show_solution(self, model: dict):
-        global sol_num
-        solution_os, solution_ps = self.get_solution(model)
-        data = []
-        for i in range(self.height):
-            data_r = []
-            for j in range(self.width):
-                data_r.append(solution_ps[(i, j)][0])
-            data.append(data_r)
-        plt.imshow(data, cmap="Set3")
-        plt.axis('off')
-
-        for i in range(self.height):
-            for j in range(self.width):
-                is_o = solution_os[(i, j)]
-                plt.text(j, i, 'O' if is_o else 'X',
-                         horizontalalignment='center',
-                         verticalalignment='center',
-                         fontweight='bold', size='xx-large', color='0.2'
-                         )
-        if socket.gethostname() in inesc_servers:
-            plt.savefig(f'/home/macf/public_html/xoxo/configs/'
-                        f'xoxo_{sol_num:03}.pdf',
-                        format="pdf", bbox_inches='tight', pad_inches=0.15)
-            sol_num += 1
-        else:
-            plt.show(bbox_inches='tight', pad_inches=0.15)
-            sol_num += 1
-
     def block_model(self, model: dict):
         reversed_vars = {value: key for (key, value) in self._vars.items()}
         ctr = []
@@ -268,31 +169,55 @@ class Encoder:
                     # else:
                     #     lit = reversed_vars[var_idx]
                     ctr.append(lit)
-        assert len(ctr) == self.height * self.width
+        assert len(ctr) == self.board.height * self.board.width
         self.add_constraint(ctr)
 
     def get_solution(self, model):
         reversed_vars = {value: key for (key, value) in self._vars.items()}
-        solution_ps = {}
-        solution_os = {}
+        solution = Solution(self.board)
         for var_id in model:
             assert var_id in reversed_vars.keys()
             if reversed_vars[var_id].startswith("p") and model[var_id]:
                 i, j, k, l = self.de_p(reversed_vars[var_id])
-                assert (i, j) not in solution_ps
-                solution_ps[(i, j)] = (k, l)
+                assert (i, j) not in solution.colors
+                solution.add_color(i, j, k)
             elif reversed_vars[var_id].startswith("o"):
                 i, j = self.de_o(reversed_vars[var_id])
-                assert (i, j) not in solution_os
-                solution_os[(i, j)] = model[var_id]
-        return solution_os, solution_ps
+                assert self.board.is_o(i, j) == model[var_id]
+        return solution
+
+    def encode_board_constraints(self):
+        # 'X' or 'O' for the whole board:
+        for i in range(self.board.height):
+            for j in range(self.board.width):
+                if self.board.is_o(i, j):
+                    self.add_constraint([self.o(i, j)])
+                else:
+                    self.add_constraint([neg(self.o(i, j))])
+
+        # Once piece per cell
+        for i in range(self.board.height):
+            for j in range(self.board.width):
+                to_sum = []
+                for k in range(self.board.num_pieces):
+                    for l in range(self.board.pieces[k].num_parts):
+                        to_sum.append(self.p(i, j, k, l))
+                self.add_sum_eq1(to_sum)
+        # One cell per piece:
+        for k in range(self.board.num_pieces):
+            for l in range(self.board.pieces[k].num_parts):
+                to_sum = []
+                for i in range(self.board.height):
+                    for j in range(self.board.width):
+                        to_sum.append(self.p(i, j, k, l))
+                self.add_sum_eq1(to_sum)
 
     def encode_piece_constraints(self, piece: Piece):
         rotations = piece.get_rotations()
-        for i in range(self.height):
-            for j in range(self.width):
+        for i in range(self.board.height):
+            for j in range(self.board.width):
                 # which rotations are valid in this position?
-                valid_rotations = self.compute_valid_rotations(i, j, piece, rotations)
+                valid_rotations = self.board.compute_valid_rotations(i, j, piece, rotations)
 
                 # if no rotations are valid, the piece cannot be here
                 if len(valid_rotations) == 0:
@@ -334,17 +259,3 @@ class Encoder:
                                neg(o0_var) if o0 else o0_var,
                                self.p(part[0], part[1], piece.idx, l)]
                         self.add_constraint(ctr)
-
-    def compute_valid_rotations(self, i: int, j: int, piece: Piece, all_rotations: list):
-        valid_rotations = []
-        # we want rotations with rotation[0] = (piece.os[0] != is_o(i, j))
-        for flipped, positions in filter(lambda r: r[0] == (piece.os[0] != self.is_o(i, j)),
-                                         all_rotations):
-            min_i = min(map(lambda coord: i + coord[0], positions))
-            max_i = max(map(lambda coord: i + coord[0], positions))
-            min_j = min(map(lambda coord: j + coord[1], positions))
-            max_j = max(map(lambda coord: j + coord[1], positions))
-            if self.valid_i(max_i) and self.valid_i(min_i) and \
-                    self.valid_j(min_j) and self.valid_j(max_j):
-                valid_rotations.append((flipped, positions))
-        return valid_rotations
