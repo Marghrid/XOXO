@@ -47,8 +47,8 @@ class Solution:
                          )
         if socket.gethostname() in inesc_servers:
             plt.savefig(f'/home/macf/public_html/xoxo/configs/'
-                        f'xoxo_{self.id:03}.pdf',
-                        format="pdf", bbox_inches='tight', pad_inches=0.15)
+                        f'xoxo_{self.id:03}.svg',
+                        format="svg", bbox_inches='tight', pad_inches=0.15)
         else:
             plt.show(bbox_inches='tight', pad_inches=0.15)
 
