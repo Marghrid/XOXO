@@ -77,7 +77,8 @@ def send_to_solver(cnf: str):
                          stderr=subprocess.PIPE)
     po, pe = p.communicate(input=bytes(cnf, encoding='utf-8'))
     print(f"took {nice_time(time.time() - start_time)}.")
-    print("# decoding result from solver.")
+    print("# decoding result from solver...", end=' ')
+    start_time = time.time()
     rc = p.returncode
     s_out = str(po, encoding='utf-8').splitlines()
     s_err = str(pe, encoding='utf-8').split()
@@ -85,6 +86,7 @@ def send_to_solver(cnf: str):
         print('\n'.join(s_out), file=sys.stderr)
         print(cnf, file=sys.stderr)
         print(s_out)
+    print(f"took {nice_time(time.time() - start_time)}.")
 
     if rc == 10:
         model = get_model(s_out)
@@ -135,9 +137,9 @@ def main():
     print(f"took {nice_time(time.time() - start_time)}.")
 
     if config.print_constraints:
-        print("# encoded constraints")
+        print("# Encoded constraints")
         encoder.print_constraints()
-        print("# END encoded constraints")
+        print("# End encoded constraints")
 
     result, model = send_to_solver(encoder.make_dimacs())
     if not config.all_models:
@@ -151,6 +153,8 @@ def main():
 
     else:  # get all models
         num_sat_calls = 0
+        print("# All solutions.")
+        start_time = time.time()
         while result == 1:
             assert model is not None
             num_sat_calls += 1
@@ -159,14 +163,16 @@ def main():
             # block this model
             encoder.block_model(model)
             if config.print_constraints:
-                print("# encoded constraints")
+                print("# Encoded constraints")
                 encoder.print_constraints()
-                print("# END encoded constraints")
+                print("# End of encoded constraints")
 
             # get new model
             result, model = send_to_solver(encoder.make_dimacs())
-        print("# End of models.")
-        print(f"{num_sat_calls} models, {len(solutions)} distinct solutions")
+        elapsed = time.time() - start_time
+        print("# End of all solutions.")
+        print(f"# {num_sat_calls} models, {len(solutions)} distinct solutions in "
+              f"{nice_time(elapsed)}.")
 
 
 if __name__ == '__main__':
