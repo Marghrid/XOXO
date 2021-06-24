@@ -40,7 +40,8 @@ class Encoder:
         return f"o_{str(i).rjust(len(str(self.width - 1)), '0')}_" \
                f"{str(j).rjust(len(str(self.height - 1)), '0')}"
 
-    def de_o(self, p_name: str):
+    @staticmethod
+    def de_o(p_name: str):
         rgx = r"o_(\d+)_(\d+)"
         return map(int, re.match(rgx, p_name).groups())
 
@@ -55,9 +56,13 @@ class Encoder:
                f"{str(k).rjust(len(str(self.num_pieces - 1)), '0')}_" \
                f"{str(l).rjust(len(str(self.pieces[k].num_parts - 1)), '0')}"
 
-    def de_p(self, p_name: str):
+    @staticmethod
+    def de_p(p_name: str):
         rgx = r"p_(\d+)_(\d+)_(\d+)_(\d+)"
         return map(int, re.match(rgx, p_name).groups())
+
+    def is_o(self, i: int, j: int) -> bool:
+        return (i + j) % 2 == 1
 
     # aux var for sequential counter encoding for <= 1 constraints
     def s(self, i):
@@ -147,13 +152,20 @@ class Encoder:
             self.pieces.append(p)
 
     def encode(self):
+        self.encode_board_constraints()
+
+        # pieces' shape
+        for piece in self.pieces:
+            self.encode_piece_constraints(piece)
+
+    def encode_board_constraints(self):
         # 'X' or 'O' for the whole board:
         for i in range(self.height):
             for j in range(self.width):
-                if (i + j) % 2 == 0:
-                    self.add_constraint([neg(self.o(i, j))])
-                else:
+                if self.is_o(i, j):
                     self.add_constraint([self.o(i, j)])
+                else:
+                    self.add_constraint([neg(self.o(i, j))])
 
         # Once piece per cell
         for i in range(self.height):
@@ -163,7 +175,6 @@ class Encoder:
                     for l in range(self.pieces[k].num_parts):
                         to_sum.append(self.p(i, j, k, l))
                 self.add_sum_eq1(to_sum)
-
         # One cell per piece:
         for k in range(self.num_pieces):
             for l in range(self.pieces[k].num_parts):
@@ -172,13 +183,6 @@ class Encoder:
                     for j in range(self.width):
                         to_sum.append(self.p(i, j, k, l))
                 self.add_sum_eq1(to_sum)
-
-        # pieces' shape
-        for piece in self.pieces:
-            self.encode_piece(piece)
-
-    def solve(self):
-        return None
 
     def add_var(self, var: str):
         self._vars[var] = len(self._vars) + 1
@@ -208,7 +212,10 @@ class Encoder:
             assert var_id in reversed_vars.keys(), f"{var_id}"
             if reversed_vars[var_id].startswith("p") and model[var_id]:
                 i, j, k, l = self.de_p(reversed_vars[var_id])
-                print(i, j, k, l)
+                print("p", i, j, k, l)
+            if reversed_vars[var_id].startswith("o"):
+                i, j = self.de_o(reversed_vars[var_id])
+                print(("o" if model[var_id] else "-o"), i, j)
 
     def print_solution(self, model: dict):
         solution_os, solution_ps = self.get_solution(model)
@@ -216,8 +223,8 @@ class Encoder:
         for i in range(self.height):
             for j in range(self.width):
                 k, l = solution_ps[(i, j)]
-                is_o = solution_os[(i, j)]
-                s = colored(str(k) + ("O" if is_o else "X"), colors[k % len(colors)])  # + str(l)
+                # s = colored(str(k) + ("O" if is_o else "X"), colors[k % len(colors)])  # + str(l)
+                s = colored(str(k) + str(l), colors[k % len(colors)])
                 ret += s + " "
             ret += '\n'
         print(ret)
@@ -280,56 +287,64 @@ class Encoder:
                 solution_os[(i, j)] = model[var_id]
         return solution_os, solution_ps
 
-    def encode_piece(self, piece: Piece):
+    def encode_piece_constraints(self, piece: Piece):
         rotations = piece.get_rotations()
         for i in range(self.height):
             for j in range(self.width):
                 # which rotations are valid in this position?
-                valid_rotations = []
-                for rotation in rotations:
-                    min_i = min(map(lambda coord: i + coord[0], rotation))
-                    max_i = max(map(lambda coord: i + coord[0], rotation))
-                    min_j = min(map(lambda coord: j + coord[1], rotation))
-                    max_j = max(map(lambda coord: j + coord[1], rotation))
-                    if self.valid_i(max_i) and self.valid_i(min_i) and \
-                            self.valid_j(min_j) and self.valid_j(max_j):
-                        valid_rotations.append(rotation)
+                valid_rotations = self.compute_valid_rotations(i, j, piece, rotations)
 
                 # if no rotations are valid, the piece cannot be here
                 if len(valid_rotations) == 0:
                     self.add_constraint([neg(self.p(i, j, piece.idx, 0))])
                     return
 
-                # each part is in a valid position relative to part #0
+                # each part is in a valid position relative to part #0 (flipped or not)
+                # pos0 -> (pos1 \/ pos1 \/ pos1 \/ ...)
                 for l in range(1, piece.num_parts):
-                    p_position_0 = self.p(i, j, piece.idx, 0)
-                    positions_l = [r[l] for r in valid_rotations]
-                    p_positions_l = [self.p(i + pos[0], j + pos[1], piece.idx, l) for pos in
-                                     positions_l]
-                    ctr = [neg(p_position_0)]
-                    ctr.extend(p_positions_l)
+                    abs_pos_0 = self.p(i, j, piece.idx, 0)
+                    rel_pos_l = [r[1][l] for r in valid_rotations]
+                    # abs_pos_l contains all possible position variables for part l, considering
+                    # the valid rotations.
+                    abs_pos_l = [self.p(i + pos[0], j + pos[1], piece.idx, l)
+                                 for pos in rel_pos_l]
+                    # if part 0 is in (i, j), then part l must be in a position compatible with one
+                    # of the valid rotations
+                    ctr = [neg(abs_pos_0)]
+                    ctr.extend(abs_pos_l)
                     self.add_constraint(ctr)
 
                 # all parts are in the same rotation
                 for rotation in valid_rotations:
-                    parts_positions = [(i + p[0], j + p[1]) for p in rotation]
-                    # first 2 parts define the rotation:
-                    first = parts_positions[0]
-                    second = parts_positions[1]
-                    remaining = parts_positions[2:]
-                    # remaining pieces must comply
-                    for p_idx, part in enumerate(remaining):
+                    # piece is not flipped
+                    parts_positions = [(i + p[0], j + p[1]) for p in rotation[1]]
+                    # first 2 parts + symbol of 1st part define the rotation:
+                    pos0 = parts_positions[0]
+                    pos1 = parts_positions[1]
+                    o0 = not piece.os[0] if rotation[0] else piece.os[0]
+                    o0_var = self.o(pos0[0], pos0[1])
+                    pos_remaining = parts_positions[2:]
+                    # remaining pieces must comply:
+                    # if pos0 and pos1 are these, and o0 is the non-flipped value, then the
+                    # remaining vars must be in one of the valid non-flipped rotations:
+                    for p_idx, part in enumerate(pos_remaining):
                         l = p_idx + 2
-                        ctr = [neg(self.p(first[0], first[1], piece.idx, 0)),
-                               neg(self.p(second[0], second[1], piece.idx, 1)),
+                        ctr = [neg(self.p(pos0[0], pos0[1], piece.idx, 0)),
+                               neg(self.p(pos1[0], pos1[1], piece.idx, 1)),
+                               neg(o0_var) if o0 else o0_var,
                                self.p(part[0], part[1], piece.idx, l)]
                         self.add_constraint(ctr)
 
-                # each part is in the correct 'X' or 'O'
-                # for l in range(piece.num_parts):
-                #     pos_l = self.p(i, j, piece.idx, l)
-                #     if piece.os[l]:  # this part is an 'O'
-                #         ctr = [neg(pos_l), self.o(i, j)]
-                #     else:
-                #         ctr = [neg(pos_l), neg(self.o(i, j))]
-                #     self.add_constraint(ctr)
+    def compute_valid_rotations(self, i: int, j: int, piece: Piece, all_rotations: list):
+        valid_rotations = []
+        # we want rotations with rotation[0] = (piece.os[0] != is_o(i, j))
+        for flipped, positions in filter(lambda r: r[0] == (piece.os[0] != self.is_o(i, j)),
+                                         all_rotations):
+            min_i = min(map(lambda coord: i + coord[0], positions))
+            max_i = max(map(lambda coord: i + coord[0], positions))
+            min_j = min(map(lambda coord: j + coord[1], positions))
+            max_j = max(map(lambda coord: j + coord[1], positions))
+            if self.valid_i(max_i) and self.valid_i(min_i) and \
+                    self.valid_j(min_j) and self.valid_j(max_j):
+                valid_rotations.append((flipped, positions))
+        return valid_rotations

@@ -40,12 +40,15 @@ def get_model(lines):
     found = False
     for line in lines:
         line = line.rstrip()
-        if not line: continue
-        if not line.startswith('v ') and not line.startswith('V '): continue
+        if not line:
+            continue
+        if not line.startswith('v ') and not line.startswith('V '):
+            continue
         found = True
         vs = line.split()[1:]
         for v in vs:
-            if v == '0': break
+            if v == '0':
+                break
             vals[int(var(v))] = not sign(v)
     return vals if found else None
 
@@ -113,7 +116,6 @@ if __name__ == '__main__':
         print("# END encoded constraints")
 
     result, solver_output = send_to_solver(encoder.make_dimacs())
-
     if not get_all_models:
         if result == 1:
             model = get_model(solver_output)

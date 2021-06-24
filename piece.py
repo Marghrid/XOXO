@@ -80,7 +80,7 @@ class Piece:
         return ret[:-1]
 
     def get_rotations(self):
-        rotations = [self.coords]
+        rotations = [(False, self.coords)]
         coords_matrix = np.array(self.coords)
         rotation_matrix_90 = np.array([[0, 1], [-1, 0]])
         rotation_matrix_180 = np.array([[-1, 0], [0, -1]])
@@ -89,8 +89,18 @@ class Piece:
         rotated_180 = np.dot(coords_matrix, rotation_matrix_180).tolist()
         rotated_270 = np.dot(coords_matrix, rotation_matrix_270).tolist()
 
-        rotations.append(rotated_90)
-        rotations.append(rotated_180)
-        rotations.append(rotated_270)
+        rotations.append((False, rotated_90))
+        rotations.append((False, rotated_180))
+        rotations.append((False, rotated_270))
+
+        flipped_coords_matrix = np.dot(np.array(self.coords), np.array([[-1, 0], [0, 1]]))
+        rotated_90 = np.dot(flipped_coords_matrix, rotation_matrix_90).tolist()
+        rotated_180 = np.dot(flipped_coords_matrix, rotation_matrix_180).tolist()
+        rotated_270 = np.dot(flipped_coords_matrix, rotation_matrix_270).tolist()
+
+        rotations.append((True, flipped_coords_matrix.tolist()))
+        rotations.append((True, rotated_90))
+        rotations.append((True, rotated_180))
+        rotations.append((True, rotated_270))
 
         return rotations
