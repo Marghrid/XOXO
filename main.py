@@ -126,6 +126,7 @@ def handle_sat(model: dict, encoder: Encoder):
 
 
 def main():
+    global solutions
     print("# encoding...", end=' ')
     start_time = time.time()
     board = Board(width=10, height=5)
@@ -149,8 +150,10 @@ def main():
             print("ERROR: something went wrong with the solver")
 
     else:  # get all models
+        num_sat_calls = 0
         while result == 1:
             assert model is not None
+            num_sat_calls += 1
             handle_sat(model, encoder)
 
             # block this model
@@ -162,7 +165,8 @@ def main():
 
             # get new model
             result, model = send_to_solver(encoder.make_dimacs())
-        print("# End of models")
+        print("# End of models.")
+        print(f"{num_sat_calls} models, {len(solutions)} distinct solutions")
 
 
 if __name__ == '__main__':
