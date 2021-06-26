@@ -2,7 +2,6 @@
 import argparse
 import glob
 import os
-import shutil
 import socket
 import subprocess
 import sys
@@ -51,20 +50,25 @@ def ready_dirs():
         if not os.path.exists(solutions_dir):
             os.makedirs(solutions_dir)
         else:
-            input(f"Do you want to remove all files in {solutions_dir} [y|n]? ")
-            if 'y':
-                files = glob.glob(solutions_dir + '*.txt')
-                for file in files:
-                    os.remove(file)
-    if config.show_solution and  socket.gethostname() in inesc_servers:
+            files = glob.glob(solutions_dir + '*.out')
+            if len(files) > 0:
+                input(f"Do you want to remove {len(files)} files in "
+                      f"{solutions_dir} [y|n]? ")
+                if 'y':
+                    for file in files:
+                        os.remove(file)
+    if config.show_solution and socket.gethostname() in inesc_servers:
         if not os.path.exists(pretty_representations_dir):
             os.makedirs(pretty_representations_dir)
         else:
-            input(f"Do you want to remove all files in {pretty_representations_dir} [y|n]? ")
-            if 'y':
-                files = glob.glob(pretty_representations_dir + '*.txt')
-                for file in files:
-                    os.remove(file)
+            files = glob.glob(pretty_representations_dir + '*.svg')
+            if len(files) > 0:
+                input(f"Do you want to remove {len(files)} files in "
+                      f"{pretty_representations_dir} [y|n]? ")
+                if 'y':
+
+                    for file in files:
+                        os.remove(file)
 
 
 def nice_time(total_seconds):
@@ -163,7 +167,7 @@ def handle_sat(model: dict, encoder, elapsed):
     print(f"# Solution #{len(solutions) + 1} after {nice_time(elapsed)}:")
     print(solution)
     print(f"# End of solution #{len(solutions) + 1}. "
-          f"Avg. {nice_time(elapsed/(len(solutions) + 1))} per solution.")
+          f"Avg. {nice_time(elapsed / (len(solutions) + 1))} per solution.")
     if config.store_solution:
         filename = solutions_dir + f'xoxo_{len(solutions):03}.out'
         print(f"# Saving solution to {filename}...")
