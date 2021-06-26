@@ -1,6 +1,7 @@
 from itertools import combinations
 
 import numpy as np
+from matplotlib import pyplot as plt
 from termcolor import colored
 
 term_colors = ["red", "green", "yellow", "blue", "magenta", "cyan"]
@@ -24,13 +25,16 @@ class Piece:
             if distance == 1:
                 assert self.os[x1] != self.os[x2], str(self)
 
+        # debug:
+        # self.show()
+
     def init_0(self):
-        self.coords = [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2]]
-        self.os = [True, False, True, False, True]
+        self.coords = [[0, 0], [0, 1], [1, 1], [2, 1], [2, 2]]
+        self.os = [False, True, False, True, False]
 
     def init_1(self):
-        self.coords = [[0, 0], [1, 0], [2, 0], [2, 1], [3, 1]]
-        self.os = [False, True, False, True, False]
+        self.coords = [[0, 0], [0, 1], [0, 2], [1, 1], [2, 1]]
+        self.os = [True, False, True, True, False]
 
     def init_2(self):
         self.coords = [[0, 0], [1, 0], [0, 1], [0, 2], [1, 2]]
@@ -49,16 +53,16 @@ class Piece:
         self.os = [True, False, False, True, False]
 
     def init_6(self):
-        self.coords = [[0, 0], [0, 1], [0, 2], [1, 1], [2, 1]]
-        self.os = [True, False, True, True, False]
+        self.coords = [[0, 0], [1, 0], [2, 0], [2, 1], [3, 1]]
+        self.os = [False, True, False, True, False]
 
     def init_7(self):
         self.coords = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1]]
         self.os = [True, False, True, False, True]
 
     def init_8(self):
-        self.coords = [[0, 0], [0, 1], [1, 1], [2, 1], [2, 2]]
-        self.os = [False, True, False, True, False]
+        self.coords = [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2]]
+        self.os = [True, False, True, False, True]
 
     def init_9(self):
         self.coords = [[0, 0], [0, 1], [0, 2], [0, 3], [1, 2]]
@@ -76,6 +80,33 @@ class Piece:
                 ret += s
             ret += '\n'
         return ret[:-1]
+
+    def show(self):
+        data = []
+        max_i = max(1, max(map(lambda coord: coord[0], self.coords)))
+        max_j = max(1, max(map(lambda coord: coord[1], self.coords)))
+        for i in range(max_i + 1):
+            data_r = []
+            for j in range(max_j+1):
+                if [i,j] in self.coords:
+                    data_r.append(self.idx)
+                else:
+                    data_r.append(-1)
+            data.append(data_r)
+        plt.imshow(data, cmap="Blues")
+        plt.axis('off')
+
+        for i in range(max_i + 1):
+            for j in range(max_j+1):
+                if [i, j] in self.coords:
+                    is_o = self.os[self.coords.index([i,j])]
+                    plt.text(j, i, 'O' if is_o else 'X',
+                             horizontalalignment='center',
+                             verticalalignment='center',
+                             fontweight='bold', size=40, color='0.9'
+                             )
+        plt.title(f"Piece #{self.idx}", size=35)
+        plt.show(bbox_inches='tight', pad_inches=0)
 
     def get_rotations(self):
         """ Returns alternate sets of coordinates for pieces, considering all possible rotations.
