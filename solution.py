@@ -1,13 +1,8 @@
-import socket
-
 from matplotlib import pyplot as plt
 from termcolor import colored
 
 from board import Board
 from piece import term_colors
-
-inesc_servers = ["centaurus", "musca", "octans", "scutum", "spica", "serpens", "sextans", "crux",
-                 "crater", "corvus", "dorado"]
 
 
 class Solution:
@@ -26,7 +21,7 @@ class Solution:
         """ Main function to build a solution. Set position (i, j) to color color."""
         self.colors[(i, j)] = color
 
-    def show(self):
+    def show(self, filename=None):
         """ Show a solution using a matplotlib heatmap. """
         data = []
         for i in range(self.board.height):
@@ -45,9 +40,8 @@ class Solution:
                          verticalalignment='center',
                          fontweight='bold', size='xx-large', color='0.2'
                          )
-        if socket.gethostname() in inesc_servers:
-            plt.savefig(f'/home/macf/public_html/xoxo/configs/'
-                        f'xoxo_{self.id:03}.svg',
+        if filename is not None and len(filename) > 0:
+            plt.savefig(filename,
                         format="svg", bbox_inches='tight', pad_inches=0)
         else:
             plt.show(bbox_inches='tight', pad_inches=0.15)
@@ -63,3 +57,14 @@ class Solution:
                 ret += s + " "
             ret += '\n'
         return ret[:-1]
+
+    def dump(self, filename=None):
+        s = '\n'.join(map(lambda i: ''.join(
+            map(lambda j: str(self.colors[(i, j)]),
+                range(self.board.width))),
+                        range(self.board.height)))
+        if filename is not None and len(filename) > 0:
+            with open(filename, 'w+') as f:
+                f.write(s + '\n')
+        else:
+            print(s)
