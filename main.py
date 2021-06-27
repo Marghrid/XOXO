@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from board import Board
-from encoder2 import Encoder2
+from encoder2 import Encoder
 
 
 def sign(lit): return lit[0] == '-'
@@ -22,6 +22,7 @@ def var(lit): return lit[1:] if lit[0] == '-' else lit
 config: Optional["Configurations"] = None
 solver = "cadical"
 solutions = set()
+num_max_solutions = 1000
 
 inesc_servers = ["centaurus", "musca", "octans", "scutum", "spica", "serpens", "sextans", "crux",
                  "crater", "corvus", "dorado"]
@@ -168,24 +169,26 @@ def handle_sat(model: dict, encoder, elapsed):
     print(solution)
     print(f"# End of solution #{len(solutions) + 1}. "
           f"Avg. {nice_time(elapsed / (len(solutions) + 1))} per solution.")
+    if solution in solutions:
+        print("# Repeated solution. Not saving.")
+        return
     if config.store_solution:
         filename = solutions_dir + f'xoxo_{len(solutions):03}.out'
         print(f"# Saving solution to {filename}...")
         solution.dump(filename)
-    if solution not in solutions and config.show_solution:
+    if config.show_solution:
         if socket.gethostname() in inesc_servers:
             filename = pretty_representations_dir + f'xoxo_{len(solutions):03}.svg'
             solution.show(filename)
         else:
             solution.show()
-
     solutions.add(solution)
 
 
 def main():
-    global solutions
+    global solutions, num_max_solutions
     board = Board(width=10, height=5)
-    encoder = Encoder2(board)
+    encoder = Encoder(board)
     print(f"# encoding with {encoder.__class__.__name__}...", end=' ')
     start_time = time.time()
     encoder.encode()
@@ -210,13 +213,13 @@ def main():
     else:  # get all models
         num_sat_calls = 0
         print("# All solutions.")
-        while result == 1:
+        while result == 1 and len(solutions) + 1 < num_max_solutions:
             assert model is not None
             num_sat_calls += 1
             handle_sat(model, encoder, time.time() - start_time)
 
             # block this model
-            print("# blocking model...", end=' ')
+            print("# blocking model...")
             encoder.block_model(model)
             if config.print_constraints:
                 print("# Encoded constraints")

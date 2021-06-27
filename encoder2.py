@@ -7,7 +7,7 @@ from piece import Piece
 from solution import Solution
 
 
-class Encoder2:
+class Encoder:
     """ I don't need 'o' variables. """
 
     def __init__(self, board: Board):
@@ -149,7 +149,7 @@ class Encoder2:
 
     def get_solution(self, model):
         reversed_vars = {value: key for (key, value) in self._vars.items()}
-        solution = Solution(self.board)
+        solution = Solution()
         for var_id in model:
             assert var_id in reversed_vars.keys()
             if reversed_vars[var_id].startswith("p") and model[var_id]:
