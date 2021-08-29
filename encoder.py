@@ -10,6 +10,8 @@ def neg(lit: str): return lit[1:] if lit[0] == '-' else '-' + lit
 
 
 class Encoder:
+    """ I don't need 'o' variables. """
+
     def __init__(self, board: Board):
         self._vars = {}
         self.constraints = []
@@ -17,18 +19,6 @@ class Encoder:
         self.board = board
 
         self.init_vars()
-
-    def o(self, i: int, j: int):
-        assert self.board.valid_i(i), f"i: {i}"
-        assert self.board.valid_j(j), f"j: {j}"
-
-        return f"o_{str(i).rjust(len(str(self.board.max_i)), '0')}_" \
-               f"{str(j).rjust(len(str(self.board.max_j)), '0')}"
-
-    @staticmethod
-    def de_o(p_name: str):
-        rgx = r"o_(\d+)_(\d+)"
-        return map(int, re.match(rgx, p_name).groups())
 
     def p(self, i: int, j: int, k: int, l: int):
         assert self.board.valid_i(i), f"i: {i}"
@@ -52,17 +42,15 @@ class Encoder:
         return f's_{i}_{self.s_fresh}'
 
     def init_vars(self):
-        # o vars
-        for i in range(self.board.height):
-            for j in range(self.board.width):
-                self.add_var(self.o(i, j))
-
         # p vars
         for i in range(self.board.height):
             for j in range(self.board.width):
                 for k in range(self.board.num_pieces):
                     for l in range(self.board.pieces[k].num_parts):
                         self.add_var(self.p(i, j, k, l))
+
+    def add_var(self, var: str):
+        self._vars[var] = len(self._vars) + 1
 
     def add_constraint(self, constraint):
         """add constraints, which is a list of literals"""
@@ -121,13 +109,8 @@ class Encoder:
 
     def encode(self):
         self.encode_board_constraints()
-
-        # pieces' shape
         for piece in self.board.pieces:
             self.encode_piece_constraints(piece)
-
-    def add_var(self, var: str):
-        self._vars[var] = len(self._vars) + 1
 
     def make_dimacs(self):
         """ Encode constraints as CNF in DIMACS. """
@@ -155,46 +138,29 @@ class Encoder:
             if reversed_vars[var_id].startswith("p") and model[var_id]:
                 i, j, k, l = self.de_p(reversed_vars[var_id])
                 print("p", i, j, k, l)
-            if reversed_vars[var_id].startswith("o"):
-                i, j = self.de_o(reversed_vars[var_id])
-                print(("o" if model[var_id] else "-o"), i, j)
 
     def block_model(self, model: dict):
         reversed_vars = {value: key for (key, value) in self._vars.items()}
         ctr = []
         for var_idx in model:
-            if reversed_vars[var_idx].startswith("p"):
-                if model[var_idx]:
-                    lit = neg(reversed_vars[var_idx])
-                    # else:
-                    #     lit = reversed_vars[var_idx]
-                    ctr.append(lit)
+            if reversed_vars[var_idx].startswith("p") and model[var_idx]:
+                lit = neg(reversed_vars[var_idx])
+                ctr.append(lit)
         assert len(ctr) == self.board.height * self.board.width
         self.add_constraint(ctr)
 
     def get_solution(self, model):
         reversed_vars = {value: key for (key, value) in self._vars.items()}
-        solution = Solution(self.board)
+        solution = Solution()
         for var_id in model:
             assert var_id in reversed_vars.keys()
             if reversed_vars[var_id].startswith("p") and model[var_id]:
                 i, j, k, l = self.de_p(reversed_vars[var_id])
                 assert (i, j) not in solution.colors
                 solution.add_color(i, j, k)
-            elif reversed_vars[var_id].startswith("o"):
-                i, j = self.de_o(reversed_vars[var_id])
-                assert self.board.is_o(i, j) == model[var_id]
         return solution
 
     def encode_board_constraints(self):
-        # 'X' or 'O' for the whole board:
-        for i in range(self.board.height):
-            for j in range(self.board.width):
-                if self.board.is_o(i, j):
-                    self.add_constraint([self.o(i, j)])
-                else:
-                    self.add_constraint([neg(self.o(i, j))])
-
         # Once piece per cell
         for i in range(self.board.height):
             for j in range(self.board.width):
@@ -216,10 +182,10 @@ class Encoder:
         rotations = piece.get_rotations()
         for i in range(self.board.height):
             for j in range(self.board.width):
-                # which rotations are valid in this position?
+                # which rotations are valid in (i, j)?
                 valid_rotations = self.board.compute_valid_rotations(i, j, piece, rotations)
 
-                # if no rotations are valid, the piece cannot be here
+                # if no rotations are valid, the piece cannot be in (i, j)
                 if len(valid_rotations) == 0:
                     self.add_constraint([neg(self.p(i, j, piece.idx, 0))])
                     return
@@ -244,18 +210,21 @@ class Encoder:
                     # piece is not flipped
                     parts_positions = [(i + p[0], j + p[1]) for p in rotation[1]]
                     # first 2 parts + symbol of 1st part define the rotation:
+                    o0_piece = not piece.os[0] if rotation[0] else piece.os[0]
+                    o0_board = self.board.is_o(i, j)
+                    # We create the clause only if this rotation can be in (i,j) i.e.,
+                    # if o0_piece and o0_board agree
+                    if o0_piece != o0_board:
+                        continue
                     pos0 = parts_positions[0]
                     pos1 = parts_positions[1]
-                    o0 = not piece.os[0] if rotation[0] else piece.os[0]
-                    o0_var = self.o(pos0[0], pos0[1])
                     pos_remaining = parts_positions[2:]
                     # remaining pieces must comply:
-                    # if pos0 and pos1 are these, and o0 is the non-flipped value, then the
-                    # remaining vars must be in one of the valid non-flipped rotations:
+                    # if pos0 and pos1 are these, and symbol is in agreement (checked before),
+                    # then the remaining vars must be in one of the valid non-flipped rotations:
                     for p_idx, part in enumerate(pos_remaining):
                         l = p_idx + 2
                         ctr = [neg(self.p(pos0[0], pos0[1], piece.idx, 0)),
                                neg(self.p(pos1[0], pos1[1], piece.idx, 1)),
-                               neg(o0_var) if o0 else o0_var,
                                self.p(part[0], part[1], piece.idx, l)]
                         self.add_constraint(ctr)

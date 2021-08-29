@@ -80,7 +80,7 @@ class Solution:
         return '\n'.join(map(lambda i: ''.join(
             map(lambda j: str(self.colors[(i, j)]),
                 range(self.width))),
-                          range(self.height)))
+                             range(self.height)))
 
     def __hash__(self):
         self.check_solution()

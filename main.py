@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from board import Board
-from encoder2 import Encoder
+from encoder import Encoder
 
 
 def sign(lit): return lit[0] == '-'
